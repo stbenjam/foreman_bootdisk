@@ -1,0 +1,79 @@
+#!ipxe
+set provision_url <%= Setting[:unattended_url] %>
+set menu-timeout 5000
+set submenu-timeout ${menu-timeout}
+isset ${menu-default} || set menu-default exit
+
+:start
+echo
+echo
+echo Please enter a host name for the new host:
+read hostname
+
+menu Select a host group for ${hostname}
+item --gap --             ------------------------- Host Groups ------------------------
+<% menu_idx = 0 -%>
+<% for hostgroup in @hostgroups -%>
+item <%= "hg#{menu_idx = menu_idx + 1}" %>                  <%= hostgroup %>
+<% end -%>
+item --gap --             -------------------------------------------------------------
+item --key r reboot       (R)eboot computer
+item --key x exit         E(x)it iPXE and continue BIOS boot
+choose --timeout ${menu-timeout} selected || goto cancel
+set menu-timeout 0
+goto ${selected}
+
+:reboot
+reboot
+
+:exit
+exit
+
+<% menu_idx = 0 -%>
+<% for hostgroup in @hostgroups -%>
+
+# <%= hostgroup %>
+<%= ":hg#{menu_idx = menu_idx + 1}" %>
+menu Select an organization for ${hostname}
+item --gap --             ------------------------ Organizations-----------------------
+<% for org in hostgroup.organizations -%>
+item <%= org.id %> <%= org %>
+<% end -%>
+item --gap --             -------------------------------------------------------------
+item start                Return to host groups menu
+item
+item --key r reboot       (R)eboot computer
+item --key x exit         E(x)it iPXE and continue BIOS boot
+choose --timeout ${menu-timeout} selected || goto cancel
+set menu-timeout 0
+iseq ${selected} menu && goto menu || set organization ${selected}
+
+menu Select a location for ${hostname}
+item --gap --             ------------------------ Locations-----------------------
+<% for loc in hostgroup.locations -%>
+item <%= loc.id %> <%= loc %>
+<% end -%>
+item --gap --             -------------------------------------------------------------
+item start                Return to host groups menu
+item
+item --key r reboot       (R)eboot computer
+item --key x exit         E(x)it iPXE and continue BIOS boot
+choose --timeout ${menu-timeout} selected || goto cancel
+set menu-timeout 0
+iseq ${selected} menu && goto menu || set location ${selected}
+goto review
+
+:review
+echo Please Review Selections
+echo Hostname:     ${hostname}
+echo Organization: ${organization}
+echo Location:     ${location}
+echo
+echo Continue? (Y/n)
+read answer
+iseq ${answer} Y || goto start
+echo
+
+chain <%= foreman_url('hostgroup') %>?token=shibboleth&name=${hostname}&mac=${netX/mac}&location=${location}&organization=${organization}&hostgroup=<%= hostgroup.id %>
+<% end -%>
+
